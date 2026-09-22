@@ -1,102 +1,102 @@
-// src/App.js
-// Main application router and layout
-import React, { useEffect, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AppProvider, useApp } from './context/AppContext';
+import { authAPI } from './api';
 
-// Pages
-import SplashScreen from './pages/SplashScreen';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
+import Login    from './pages/Login';
+import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
-import SafetyMap from './pages/SafetyMap';
-import SOSPage from './pages/SOSPage';
-import TrustedContacts from './pages/TrustedContacts';
-import TravelSafety from './pages/TravelSafety';
-import SafetyReports from './pages/SafetyReports';
-import AlertHistory from './pages/AlertHistory';
-import SettingsPage from './pages/SettingsPage';
-import DemoMode from './pages/DemoMode';
-
-// Components
+import SOSPage  from './pages/SOSPage';
+import Contacts from './pages/Contacts';
+import Reports  from './pages/Reports';
+import Profile  from './pages/Profile';
+import TopNav   from './components/TopNav';
 import BottomNav from './components/BottomNav';
-import TopNav from './components/TopNav';
-import EmergencyCountdown from './components/EmergencyCountdown';
-import SOSOverlay from './components/SOSOverlay';
-import FakeCallScreen from './components/FakeCallScreen';
-import NotificationToast from './components/NotificationToast';
 
-function ProtectedRoute({ children }) {
-  const { isAuthenticated, authLoading } = useApp();
-  if (authLoading) return <SplashScreen />;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-  return children;
-}
+// ── Auth Context ──────────────────────────────────────────────────────────────
+const AuthCtx = createContext(null);
+export function useAuth() { return useContext(AuthCtx); }
 
-function AppLayout({ children }) {
-  const { isAuthenticated, activeSos, countdownActive, currentStatus } = useApp();
-  const [showFakeCall, setShowFakeCall] = useState(false);
+function AuthProvider({ children }) {
+  const [user, setUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('sg_user')); } catch { return null; }
+  });
+  const [loading, setLoading] = useState(!!localStorage.getItem('sg_token'));
 
-  // Expose fake call trigger globally
   useEffect(() => {
-    window._triggerFakeCall = () => setShowFakeCall(true);
-    return () => { window._triggerFakeCall = null; };
+    const token = localStorage.getItem('sg_token');
+    if (!token) { setLoading(false); return; }
+    authAPI.me()
+      .then(r => { setUser(r.data); localStorage.setItem('sg_user', JSON.stringify(r.data)); })
+      .catch(() => { localStorage.removeItem('sg_token'); localStorage.removeItem('sg_user'); setUser(null); })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const login = useCallback(async (email, password) => {
+    const r = await authAPI.login({ email, password });
+    localStorage.setItem('sg_token', r.data.token);
+    localStorage.setItem('sg_user', JSON.stringify(r.data.user));
+    setUser(r.data.user);
+    return r.data.user;
+  }, []);
+
+  const register = useCallback(async (data) => {
+    const r = await authAPI.register(data);
+    localStorage.setItem('sg_token', r.data.token);
+    localStorage.setItem('sg_user', JSON.stringify(r.data.user));
+    setUser(r.data.user);
+    return r.data.user;
+  }, []);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('sg_token');
+    localStorage.removeItem('sg_user');
+    setUser(null);
   }, []);
 
   return (
-    <div className="app-container">
-      {isAuthenticated && <TopNav onFakeCall={() => setShowFakeCall(true)} />}
-      <main className="main-content">
-        {children}
-      </main>
-      {isAuthenticated && <BottomNav />}
-      {countdownActive && <EmergencyCountdown />}
-      {activeSos && currentStatus === 'SOS' && <SOSOverlay onFakeCall={() => setShowFakeCall(true)} />}
-      {showFakeCall && <FakeCallScreen onClose={() => setShowFakeCall(false)} />}
-      <NotificationToast />
+    <AuthCtx.Provider value={{ user, loading, login, register, logout }}>
+      {children}
+    </AuthCtx.Provider>
+  );
+}
+
+// ── Protected wrapper ─────────────────────────────────────────────────────────
+function Protected({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100dvh' }}>
+      <div className="spinner" style={{ width:36, height:36 }} />
     </div>
+  );
+  return user ? children : <Navigate to="/login" replace />;
+}
+
+// ── App shell with nav ────────────────────────────────────────────────────────
+function Shell({ children }) {
+  return (
+    <>
+      <TopNav />
+      {children}
+      <BottomNav />
+    </>
   );
 }
 
 export default function App() {
   return (
-    <AppProvider>
+    <AuthProvider>
       <BrowserRouter>
-        <AppLayout>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="/" element={
-              <ProtectedRoute><Dashboard /></ProtectedRoute>
-            } />
-            <Route path="/map" element={
-              <ProtectedRoute><SafetyMap /></ProtectedRoute>
-            } />
-            <Route path="/sos" element={
-              <ProtectedRoute><SOSPage /></ProtectedRoute>
-            } />
-            <Route path="/contacts" element={
-              <ProtectedRoute><TrustedContacts /></ProtectedRoute>
-            } />
-            <Route path="/travel" element={
-              <ProtectedRoute><TravelSafety /></ProtectedRoute>
-            } />
-            <Route path="/reports" element={
-              <ProtectedRoute><SafetyReports /></ProtectedRoute>
-            } />
-            <Route path="/history" element={
-              <ProtectedRoute><AlertHistory /></ProtectedRoute>
-            } />
-            <Route path="/settings" element={
-              <ProtectedRoute><SettingsPage /></ProtectedRoute>
-            } />
-            <Route path="/demo" element={
-              <ProtectedRoute><DemoMode /></ProtectedRoute>
-            } />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </AppLayout>
+        <Routes>
+          <Route path="/login"    element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/" element={<Protected><Shell><Dashboard /></Shell></Protected>} />
+          <Route path="/sos" element={<Protected><Shell><SOSPage /></Shell></Protected>} />
+          <Route path="/contacts" element={<Protected><Shell><Contacts /></Shell></Protected>} />
+          <Route path="/reports"  element={<Protected><Shell><Reports /></Shell></Protected>} />
+          <Route path="/profile"  element={<Protected><Shell><Profile /></Shell></Protected>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </BrowserRouter>
-    </AppProvider>
+    </AuthProvider>
   );
 }

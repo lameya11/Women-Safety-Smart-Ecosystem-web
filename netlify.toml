@@ -1,17 +1,12 @@
-# Netlify configuration for frontend
-# Deploy frontend to Netlify (free tier)
-
 [build]
-  base = "frontend"
+  base    = "frontend"
   publish = "build"
-  command = "npm run build"
+  command = "npm install && npm run build"
 
 [build.environment]
   NODE_VERSION = "18"
-  # Set REACT_APP_API_URL in Netlify dashboard → Site settings → Environment variables
-  # Example: REACT_APP_API_URL=https://your-backend.onrender.com/api
 
 [[redirects]]
-  from = "/*"
-  to = "/index.html"
+  from   = "/*"
+  to     = "/index.html"
   status = 200
