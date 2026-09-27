@@ -1,0 +1,23 @@
+# render.yaml - Backend deployment configuration for Render.com
+# Deploy this file with your repo to auto-configure Render
+
+services:
+  - type: web
+    name: safeguard-backend
+    env: node
+    region: oregon
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # Set these secret values in Render Dashboard:
+      # - JWT_SECRET (generate a strong random string)
+      # - FRONTEND_URL (your Netlify/Vercel URL)
+      # - FIREBASE_PROJECT_ID
+      # - FIREBASE_PRIVATE_KEY
+      # - FIREBASE_CLIENT_EMAIL
+      # - FIREBASE_DATABASE_URL

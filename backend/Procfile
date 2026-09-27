@@ -1,0 +1,5 @@
+# Backend deployment for Render.com (free tier)
+# buildCommand: npm install
+# startCommand: npm start
+
+# Procfile equivalent - set these in Render dashboard
