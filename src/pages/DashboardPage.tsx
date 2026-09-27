@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, MapPin, Phone, CheckCircle, AlertTriangle, Bell, Settings, Navigation, Zap } from 'lucide-react';
+import { Shield, MapPin, Phone, CheckCircle, AlertTriangle, Bell, Settings, Navigation, Zap, Sparkles, Smartphone, Share2, WifiOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSafety } from '../context/SafetyContext';
 import { BottomNav } from '../components/BottomNav';
+import { useShakeDetection } from '../hooks/useShakeDetection';
 import type { SafetyStatus } from '../types';
 
 const STATUS_CONFIG: Record<SafetyStatus, { label: string; bg: string; text: string; icon: React.ComponentType<{size?:number;className?:string}>; border: string }> = {
@@ -14,12 +15,13 @@ const STATUS_CONFIG: Record<SafetyStatus, { label: string; bg: string; text: str
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { safetyStatus, safetyModeActive, toggleSafetyMode, location, locationError, requestLocation, activateSOS, demo } = useSafety();
+  const { user, backendAvailable } = useAuth();
+  const { safetyStatus, safetyModeActive, toggleSafetyMode, location, locationError, requestLocation, activateSOS, demo, locationShare, startLocationSharing, stopLocationSharing } = useSafety();
 
   const [holdProgress, setHoldProgress] = useState(0);
   const [isHolding, setIsHolding] = useState(false);
   const [sosTriggered, setSosTriggered] = useState(false);
+  const [shakeAlert, setShakeAlert] = useState(false);
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const holdStartRef = useRef<number>(0);
   const HOLD_DURATION = 3000;
@@ -27,6 +29,19 @@ export function DashboardPage() {
   useEffect(() => {
     requestLocation();
   }, []);
+
+  // Shake to trigger safety check
+  useShakeDetection({
+    enabled: true,
+    threshold: 18,
+    onShake: useCallback(() => {
+      setShakeAlert(true);
+      setTimeout(() => {
+        setShakeAlert(false);
+        navigate('/safety-check');
+      }, 1200);
+    }, [navigate]),
+  });
 
   const statusCfg = STATUS_CONFIG[safetyStatus];
   const StatusIcon = statusCfg.icon;
@@ -92,6 +107,14 @@ export function DashboardPage() {
         </div>
       </header>
 
+      {/* Shake detection banner */}
+      {shakeAlert && (
+        <div className="bg-amber-500 text-white text-center py-2 text-sm font-bold animate-pulse z-50 flex items-center justify-center gap-2">
+          <Smartphone size={16} />
+          Shake detected! Launching Safety Check…
+        </div>
+      )}
+
       <main className="flex-1 overflow-y-auto pb-24 px-4 pt-4 space-y-4">
         {/* Greeting */}
         <div className="fade-in">
@@ -141,6 +164,14 @@ export function DashboardPage() {
           </button>
         </div>
 
+        {/* Backend connectivity indicator */}
+        {!backendAvailable && (
+          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 fade-in">
+            <WifiOff size={14} className="text-amber-600 flex-shrink-0" />
+            <p className="text-amber-700 text-xs">Offline mode — data stored locally. Set VITE_API_URL to connect to backend.</p>
+          </div>
+        )}
+
         {/* Location Card */}
         <div className="card fade-in">
           <div className="flex items-start gap-3">
@@ -152,9 +183,14 @@ export function DashboardPage() {
               {locationError ? (
                 <p className="text-amber-600 text-sm mt-0.5">{locationError}</p>
               ) : location ? (
-                <p className="text-gray-800 text-sm font-medium mt-0.5">
-                  {location.address ?? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`}
-                </p>
+                <div>
+                  <p className="text-gray-800 text-sm font-medium mt-0.5">
+                    {location.address ?? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`}
+                  </p>
+                  {location.accuracy && (
+                    <p className="text-gray-400 text-xs mt-0.5">Accuracy: ±{Math.round(location.accuracy)}m</p>
+                  )}
+                </div>
               ) : (
                 <p className="text-gray-400 text-sm mt-0.5 italic">Acquiring location…</p>
               )}
@@ -163,6 +199,35 @@ export function DashboardPage() {
               Refresh
             </button>
           </div>
+
+          {/* Live location sharing toggle */}
+          <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Share2 size={14} className={locationShare.active ? 'text-green-600' : 'text-gray-400'} />
+              <div>
+                <p className="text-xs font-semibold text-gray-700">Live Location Sharing</p>
+                <p className="text-xs text-gray-400">
+                  {locationShare.active
+                    ? locationShare.lastPushed
+                      ? `Updated ${new Date(locationShare.lastPushed).toLocaleTimeString()}`
+                      : 'Sharing active…'
+                    : backendAvailable ? 'Share with trusted contacts' : 'Requires backend'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={locationShare.active ? stopLocationSharing : startLocationSharing}
+              disabled={!backendAvailable && !locationShare.active}
+              className={`w-11 h-6 rounded-full transition-all duration-200 relative disabled:opacity-40 ${locationShare.active ? 'bg-green-500' : 'bg-gray-300'}`}
+              role="switch"
+              aria-checked={locationShare.active}
+            >
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-200 ${locationShare.active ? 'left-5' : 'left-0.5'}`} />
+            </button>
+          </div>
+          {locationShare.error && (
+            <p className="text-amber-600 text-xs mt-2">{locationShare.error}</p>
+          )}
         </div>
 
         {/* SOS Button */}
@@ -224,6 +289,21 @@ export function DashboardPage() {
             ))}
           </div>
         </div>
+
+        {/* AI Quick-Ask Banner */}
+        <button
+          onClick={() => navigate('/ai-agent')}
+          className="w-full bg-gradient-to-r from-pink-600 to-purple-600 rounded-2xl p-4 flex items-center gap-3 shadow-lg active:scale-95 transition-transform fade-in"
+        >
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Sparkles size={22} className="text-white" />
+          </div>
+          <div className="text-left">
+            <p className="text-white font-bold">Ask Priya — AI Safety Agent</p>
+            <p className="text-pink-200 text-xs mt-0.5">Get safety tips, emergency help &amp; guidance</p>
+          </div>
+          <div className="ml-auto text-white opacity-70">→</div>
+        </button>
 
         {/* More Quick Links */}
         <div className="grid grid-cols-2 gap-3 fade-in pb-2">

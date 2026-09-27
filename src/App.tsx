@@ -15,6 +15,7 @@ import { FakeCallPage } from './pages/FakeCallPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { DemoPage } from './pages/DemoPage';
+import { AIAgentPage } from './pages/AIAgentPage';
 
 function AppRoutes() {
   return (
@@ -35,6 +36,7 @@ function AppRoutes() {
       <Route path="/history" element={<ProtectedRoute><HistoryPage /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
       <Route path="/demo" element={<ProtectedRoute><DemoPage /></ProtectedRoute>} />
+      <Route path="/ai-agent" element={<ProtectedRoute><AIAgentPage /></ProtectedRoute>} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />

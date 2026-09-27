@@ -13,7 +13,7 @@ router.get('/', auth, async (req, res) => {
 
 // POST create contact
 router.post('/', auth, async (req, res) => {
-  const { name, phone, relationship } = req.body;
+  const { name, phone, relationship, isEmergency } = req.body;
   if (!name || !phone) return res.status(400).json({ error: 'Name and phone required' });
   try {
     const contact = await db.create('contacts', {
@@ -21,6 +21,7 @@ router.post('/', auth, async (req, res) => {
       name: name.trim(),
       phone: phone.trim(),
       relationship: relationship || 'Other',
+      isEmergency: isEmergency === true || isEmergency === 'true',
     });
     res.status(201).json(contact);
   } catch (e) { res.status(500).json({ error: 'Failed to create contact' }); }
@@ -32,11 +33,12 @@ router.put('/:id', auth, async (req, res) => {
     const existing = await db.findById('contacts', req.params.id);
     if (!existing || existing.userId !== req.user.userId)
       return res.status(404).json({ error: 'Contact not found' });
-    const { name, phone, relationship } = req.body;
+    const { name, phone, relationship, isEmergency } = req.body;
     const updated = await db.update('contacts', req.params.id, {
-      ...(name && { name: name.trim() }),
-      ...(phone && { phone: phone.trim() }),
-      ...(relationship && { relationship }),
+      ...(name !== undefined && { name: name.trim() }),
+      ...(phone !== undefined && { phone: phone.trim() }),
+      ...(relationship !== undefined && { relationship }),
+      ...(isEmergency !== undefined && { isEmergency: isEmergency === true || isEmergency === 'true' }),
     });
     res.json(updated);
   } catch (e) { res.status(500).json({ error: 'Failed to update contact' }); }

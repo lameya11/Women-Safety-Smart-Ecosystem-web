@@ -1,19 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Phone, Video, Mic, MicOff, AlertCircle, MapPin, Users, StopCircle } from 'lucide-react';
+import { Phone, Video, Mic, MicOff, AlertCircle, MapPin, Users, StopCircle, Share2 } from 'lucide-react';
 import { useSafety } from '../context/SafetyContext';
+import { useAuth } from '../context/AuthContext';
 
 export function SOSPage() {
   const navigate = useNavigate();
-  const { location, contacts, deactivateSOS } = useSafety();
+  const { backendAvailable } = useAuth();
+  const { location, contacts, deactivateSOS, activeSosId, locationShare, startLocationSharing, stopLocationSharing } = useSafety();
   const [elapsed, setElapsed] = useState(0);
   const [recordingGranted, setRecordingGranted] = useState<boolean | null>(null);
   const [micActive, setMicActive] = useState(false);
+  const [sosBackendId] = useState(activeSosId);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    // Start elapsed timer
     intervalRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
+    // Auto-start location sharing when SOS activates
+    if (!locationShare.active) startLocationSharing();
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, []);
 
@@ -27,10 +31,21 @@ export function SOSPage() {
     }
   };
 
-  const handleStop = () => {
+  const handleStop = async () => {
     if (intervalRef.current) clearInterval(intervalRef.current);
-    deactivateSOS();
+    stopLocationSharing();
+    await deactivateSOS();
     navigate('/dashboard');
+  };
+
+  const shareUrl = locationShare.shareId
+    ? `${import.meta.env.VITE_API_URL ?? ''}/api/location/track/${locationShare.shareId}`
+    : null;
+
+  const copyShareLink = () => {
+    if (shareUrl) {
+      navigator.clipboard.writeText(shareUrl).catch(() => {});
+    }
   };
 
   const formatTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
@@ -51,18 +66,50 @@ export function SOSPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {/* Location status */}
+        {/* Backend SOS ID */}
+        {sosBackendId && (
+          <div className="bg-green-900/50 border border-green-700 rounded-xl px-3 py-2 flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+            <p className="text-green-300 text-xs">SOS logged on server · ID: <code className="text-green-200">{sosBackendId.slice(0, 8)}…</code></p>
+          </div>
+        )}
+
+        {/* Location sharing status */}
         <div className="bg-red-800/50 rounded-2xl p-3 flex items-start gap-3 border border-red-700">
           <MapPin size={18} className="text-red-300 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-white font-semibold text-sm">Location Sharing</p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-white font-semibold text-sm">Live Location</p>
+              {locationShare.active && (
+                <span className="flex items-center gap-1 text-green-300 text-xs">
+                  <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                  Sharing
+                </span>
+              )}
+            </div>
             {location ? (
               <p className="text-red-300 text-xs mt-0.5">
                 {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
-                {' '}· <span className="text-yellow-300">Sharing requires backend integration</span>
+                {location.accuracy && <span className="text-red-400"> · ±{Math.round(location.accuracy)}m</span>}
               </p>
             ) : (
               <p className="text-red-400 text-xs mt-0.5">Location unavailable — grant permission in Settings</p>
+            )}
+            {locationShare.lastPushed && (
+              <p className="text-green-400 text-xs mt-0.5">
+                ✓ Updated {new Date(locationShare.lastPushed).toLocaleTimeString()}
+              </p>
+            )}
+            {locationShare.error && (
+              <p className="text-yellow-400 text-xs mt-0.5">⚠️ {locationShare.error}</p>
+            )}
+            {/* Share link */}
+            {shareUrl && backendAvailable && (
+              <button onClick={copyShareLink}
+                className="mt-2 flex items-center gap-1.5 text-xs bg-red-700/50 text-red-200 px-2 py-1 rounded-lg hover:bg-red-700 transition-colors">
+                <Share2 size={11} />
+                Copy tracking link
+              </button>
             )}
           </div>
         </div>
